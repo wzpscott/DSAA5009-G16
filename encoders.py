@@ -8,6 +8,7 @@ class IdentityEncoder(nn.Module):
         return x
     
 class PositionalEncoder(nn.Module):
+    
     def __init__(self, d_input, n_freqs):
         super().__init__()
         self.d_input = d_input
@@ -19,6 +20,7 @@ class PositionalEncoder(nn.Module):
         for freq in freq_bands:
             self.embed_fns.append(lambda x, freq=freq: torch.sin(x * freq))
             self.embed_fns.append(lambda x, freq=freq: torch.cos(x * freq))
-        def forward(self, x):
-            ret = torch.concat([fn(x) for fn in self.embed_fns], dim=-1)
-            return ret
+            
+    def forward(self, x):
+        ret = torch.concat([fn(x) for fn in self.embed_fns], dim=-1)
+        return ret
