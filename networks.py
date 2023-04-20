@@ -16,6 +16,6 @@ class LSTM(nn.Module):
         if self.agg_func == 'mean':
             x = x.mean(dim=1)
         elif self.agg_func == 'sum':
-            x = x.mean(dim=1)
+            x = x.sum(dim=1)
         x = self.linear(x)
         return x

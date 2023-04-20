@@ -18,8 +18,6 @@ test_df = pd.read_csv('./data/test.csv')
 
 target_col = '187'
 features_col = [x for x in train_df.columns if x != '187']
-
-# Fixing a type for pytorch
 X = np.asarray(train_df[features_col])
 y = np.asarray(train_df[target_col])
 
@@ -39,8 +37,8 @@ n_batch = 1024
 device = 'cuda:0'
 
 # instantiating the dataset and dataloader for both training and validation
-heart_training = HeartBeatDataset(X_train, X_val, y_train, y_val, 'train')
-heart_validating = HeartBeatDataset(X_train, X_val, y_train, y_val, 'test')
+heart_training = HeartBeatDataset(X_train, y_train)
+heart_validating = HeartBeatDataset(X_val, y_val)
 
 heart_trainloader = DataLoader(heart_training, batch_size=n_batch, shuffle=True)
 heart_valloader = DataLoader(heart_validating, batch_size=n_batch, shuffle=True)
@@ -64,10 +62,8 @@ for epoch in trange(num_epochs):
         inputs = inputs.to(device)
         labels = labels.long().to(device)
         optimizer.zero_grad()
-        # print("input:", inputs.shape)
         inputs = encoder(inputs.float())
         outputs = model(inputs)
-        # print("output:", outputs.shape, "labels:", labels.shape)
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()

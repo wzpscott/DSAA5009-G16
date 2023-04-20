@@ -1,31 +1,43 @@
 from torch.utils.data import Dataset
 import numpy as np
 
-class HeartBeatDataset(Dataset):
-    def __init__(self, X_train, X_test, y_train, y_test, mode='train'):
-        self.X_train = X_train[..., None]
-        self.X_test = X_test[..., None]
-        self.y_train = y_train
-        self.y_test = y_test
+# class HeartBeatDataset(Dataset):
+#     def __init__(self, X_train, X_test, y_train, y_test, mode='train'):
+#         self.X_train = X_train[..., None]
+#         self.X_test = X_test[..., None]
+#         self.y_train = y_train
+#         self.y_test = y_test
         
-        self.mode = mode
+#         self.mode = mode
             
-    def __len__(self):
-        if self.mode == 'train':
-            return self.X_train.shape[0]
-        elif self.mode == 'test':
-            return self.X_test.shape[0]
-        else:
-            raise ValueError(f'Wrong mode: {self.mode}')
+#     def __len__(self):
+#         if self.mode == 'train':
+#             return self.X_train.shape[0]
+#         elif self.mode == 'test':
+#             return self.X_test.shape[0]
+#         else:
+#             raise ValueError(f'Wrong mode: {self.mode}')
         
+#     def __getitem__(self, idx):
+#         if self.mode == 'train':
+#             print(self.X_train.shape, self.y_train.shape)
+#             return self.X_train[idx], self.y_train[idx]
+#         elif self.mode == 'test':
+#             return self.X_test[idx], self.y_test[idx]
+#         else:
+#             raise ValueError(f'Wrong mode: {self.mode}')
+
+class HeartBeatDataset(Dataset):
+    
+    def __init__(self, X, y):
+        self.X = X[..., None]
+        self.y = y
+    
+    def __len__(self):
+        return self.X.shape[0]
+
     def __getitem__(self, idx):
-        if self.mode == 'train':
-            print(self.X_train.shape, self.y_train.shape)
-            return self.X_train[idx], self.y_train[idx]
-        elif self.mode == 'test':
-            return self.X_test[idx], self.y_test[idx]
-        else:
-            raise ValueError(f'Wrong mode: {self.mode}')
+        return self.X[idx], self.y[idx]
         
 
 if __name__ == '__main__':
