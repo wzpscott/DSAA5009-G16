@@ -3,19 +3,13 @@ import numpy as np
 
 class HeartBeatDataset(Dataset):
     def __init__(self, X_train, X_test, y_train, y_test, mode='train'):
-        self.X_train = np.asarray(X_train)
-        self.X_test = X_test
-        self.y_train = np.asarray(y_train)
+        self.X_train = X_train[..., None]
+        self.X_test = X_test[..., None]
+        self.y_train = y_train
         self.y_test = y_test
         
         self.mode = mode
-        
-    def train(self):
-        self.mode = 'train'
-        
-    def test(self):
-        self.mode = 'test'
-        
+            
     def __len__(self):
         if self.mode == 'train':
             return self.X_train.shape[0]

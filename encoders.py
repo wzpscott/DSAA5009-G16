@@ -13,14 +13,13 @@ class PositionalEncoder(nn.Module):
         super().__init__()
         self.d_input = d_input
         self.n_freqs = n_freqs
-        self.d_output = d_input * (1 + 2 * self.freqs)
+        self.d_output = d_input * (1 + 2 * self.n_freqs)
         self.embed_fns = [lambda x: x]
         
-        freq_bands = torch.linspace(2.**0., 2.**(self.n_bands - 1), self.n_bands)
+        freq_bands = torch.linspace(2.**0., 2.**(self.n_freqs - 1), self.n_freqs)
         for freq in freq_bands:
             self.embed_fns.append(lambda x, freq=freq: torch.sin(x * freq))
             self.embed_fns.append(lambda x, freq=freq: torch.cos(x * freq))
-            
     def forward(self, x):
-        ret = torch.concat([fn(x) for fn in self.embed_fns], dim=-1)
+        ret = torch.cat([fn(x) for fn in self.embed_fns], dim=-1)
         return ret
