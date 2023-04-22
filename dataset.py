@@ -37,6 +37,8 @@ class HeartBeatDataset(Dataset):
         return self.X.shape[0]
 
     def __getitem__(self, idx):
+        if self.y is None:
+            return self.X[idx]
         return self.X[idx], self.y[idx]
         
 

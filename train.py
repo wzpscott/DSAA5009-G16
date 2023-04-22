@@ -38,9 +38,10 @@ class cfg:
     n_batches: int = 1024
     weighted_loss: bool = True
     lr: float = 0.001
-    n_freqs: int = 4
+    n_freqs: int = 8 
     i_val: int = 10
     i_save: int = 100
+    i_pred: int = 50
     device: str = 'cuda:0'
     log_dir: str = './logs'
     exp_tag: str = ''
@@ -140,14 +141,17 @@ if __name__ == '__main__':
                     
             train_loss = running_loss/len(heart_training)
             val_loss = val_loss/len(heart_validating)
-            acc = acc / (i+1)
-            recall = recall / (i+1)
-            f1 = 2*acc*recall / (acc + recall)
-            confusion_mat = torch.stack(confusion_mats, dim=0).float().mean(dim=0).cpu().detach().numpy()
+            # acc = acc / (i+1)
+            # recall = recall / (i+1)
+            # f1 = 2*acc*recall / (acc + recall)
+            confusion_mat = torch.stack(confusion_mats, dim=0).float().sum(dim=0).cpu().detach().numpy()
             classes = ['Normal', 'Supraventricular', 'Ventricular', 'Ventricular + normal', 'Unclassifiable']
             df_cm = pd.DataFrame(confusion_mat / np.sum(confusion_mat, axis=1)[:, None], index=[i for i in classes],
                             columns=[i for i in classes])
             plt.figure(figsize=(12, 7), dpi=120) 
+            recall = (np.diag(confusion_mat) / np.sum(confusion_mat, axis = 1)).mean()
+            acc = (np.diag(confusion_mat) / np.sum(confusion_mat, axis = 0)).mean()
+            f1 = 2*acc*recall / (acc + recall)
             
             writer.add_figure("Confusion matrix", sns.heatmap(df_cm, annot=True, cmap='coolwarm_r').get_figure(), i_epoch)
             writer.add_scalar(f'Loss/Train loss', train_loss, global_step=i_epoch)
@@ -178,5 +182,21 @@ if __name__ == '__main__':
             ys = torch.cat(ys, dim=0).detach().cpu().numpy()
             logits = np.concatenate([logits, ys[..., None]], axis=-1)
             np.save(path.join(log_path, f'logits_{i_epoch}.npy'), logits)
-                    
-            
+
+        if i_epoch % cfg.i_pred == 0:      
+            heart_testing = HeartBeatDataset(np.asarray(test_df), y=None)
+            heart_testloader = DataLoader(heart_testing, batch_size=cfg.n_batches, shuffle=False)
+            preds = []
+            with torch.no_grad():
+                for i, data in enumerate(heart_testloader):
+                    inputs = data
+                    inputs = inputs.to(cfg.device)
+                    inputs = encoder(inputs.float())
+                    outputs = network(inputs)
+                    pred = torch.argmax(outputs, dim=-1)
+                    preds.append(pred)
+            preds = torch.cat(preds, dim=0).cpu().detach().numpy()
+            results = pd.DataFrame()
+            results['id'] = [i for i in range(1, preds.shape[0]+1)]       
+            results['predicted'] = preds      
+            results.to_csv(path.join(log_path, f'{i_epoch}.csv'), index=False)
