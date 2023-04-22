@@ -1,0 +1,1 @@
+python train.py --tyro-write-completion zsh ~/.zfunc/_train.py
