@@ -25,7 +25,7 @@ import seaborn as sns
 
 @dataclass(frozen=True)
 class cfg:
-    n_epochs: int = 200
+    n_epochs: int = 500
     network: Literal['CNN', 'LSTM'] = 'LSTM'
     bidirectional: bool = False
     test_size: float = 0.2
@@ -34,8 +34,8 @@ class cfg:
     n_layers: int = 1
     n_classes: int  = 5
     n_batches: int = 1024
-    lr: float = 0.0005
-    n_freqs: int = 0
+    lr: float = 0.001
+    n_freqs: int = 8
     device: str = 'cuda:0'
     log_dir: str = './logs'
     exp_tag: str = ''
@@ -74,7 +74,7 @@ if __name__ == '__main__':
         network = CNN(encoder.d_output, cfg.d_hidden, cfg.n_classes, cfg.n_layers).to(cfg.device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(network.parameters(), lr=cfg.lr)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.9)
 
     # to store the loss
     loss_list = list()
