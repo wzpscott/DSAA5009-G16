@@ -19,3 +19,40 @@ class LSTM(nn.Module):
             x = x.sum(dim=1)
         x = self.linear(x)
         return x
+
+class MLP(nn.Module):
+    def __init__(self, d_input, d_hidden, d_output, n_layers):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(d_input, d_hidden),
+            nn.ReLU(),
+            *[
+                nn.Sequential(nn.Linear(d_hidden, d_hidden), nn.ReLU()) for _ in range(n_layers-2)
+            ],
+            nn.Linear(d_hidden, d_output),
+        )
+        
+    def forward(self, x):
+        return self.net(x)
+    
+class CNN(nn.Module):
+    def __init__(self, d_input, d_hidden, d_output, n_layers, kernel_size=5):
+        super().__init__()
+        self.cnn = nn.Sequential(
+            nn.Conv1d(d_input, d_hidden, kernel_size=5, padding='same'),
+            # nn.BatchNorm1d(d_hidden),
+            nn.ReLU(),
+            *[nn.Sequential(
+                nn.Conv1d(d_hidden, d_hidden, kernel_size=5, padding='same'),
+                # nn.BatchNorm1d(d_hidden),
+                nn.ReLU(),
+            ) for _ in range(n_layers)]
+        )
+        self.linear = nn.Linear(d_hidden, d_output)
+    def forward(self, x):
+        # x: [N, L, C]
+        x = x.permute(0, 2, 1)
+        x = self.cnn(x)
+        x = x.mean(dim=-1)
+        x = self.linear(x)
+        return x
