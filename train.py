@@ -18,6 +18,10 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 import torch.optim.lr_scheduler as lr_scheduler
 from torch.utils.tensorboard import SummaryWriter
+from torchmetrics.classification import MulticlassConfusionMatrix, MulticlassAccuracy, MulticlassRecall, MulticlassF1Score
+
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 @dataclass(frozen=True)
 class cfg:
@@ -96,6 +100,15 @@ if __name__ == '__main__':
             
         val_loss = 0.0
         acc = 0.0
+        recall = 0.0
+        f1 = 0.0
+        confusion_mats = []
+        
+        acc_fn = MulticlassAccuracy(num_classes=cfg.n_classes).to(cfg.device)
+        recall_fn = MulticlassRecall(num_classes=cfg.n_classes).to(cfg.device)
+        f1_fn = MulticlassF1Score(num_classes=cfg.n_classes).to(cfg.device)
+        confusion_mat_fn = MulticlassConfusionMatrix(num_classes=cfg.n_classes).to(cfg.device)
+        # acc = 0.0
         with torch.no_grad():
             for i, data in enumerate(heart_valloader):
                 inputs, labels = data
@@ -105,18 +118,39 @@ if __name__ == '__main__':
                 outputs = network(inputs)
                 loss = criterion(outputs, labels)
                 val_loss += loss.item()
-                acc += (torch.argmax(outputs, 1) == labels).float().mean()
+
+                acc += acc_fn(outputs, labels)
+                recall += recall_fn(outputs, labels)
+                f1 += f1_fn(outputs, labels)
+                confusion_mats.append(confusion_mat_fn(outputs, labels))
+                
+                
         train_loss = running_loss/len(heart_training)
         val_loss = val_loss/len(heart_validating)
-        acc = acc / (i + 1)
+        acc = acc / (i+1)
+        recall = recall / (i+1)
+        f1 = f1 / (i+1)
+        confusion_mat = torch.stack(confusion_mats, dim=0).float().mean(dim=0).cpu().detach().numpy()
+        classes = ['Normal', 'Supraventricular', 'Ventricular', 'Ventricular + normal', 'Unclassifiable']
+        df_cm = pd.DataFrame(confusion_mat / np.sum(confusion_mat, axis=1)[:, None], index=[i for i in classes],
+                         columns=[i for i in classes])
+        plt.figure(figsize=(12, 7), dpi=120) 
+        
+        writer.add_figure("Confusion matrix", sns.heatmap(df_cm, annot=True, cmap='coolwarm_r').get_figure(), epoch)
         writer.add_scalar(f'Loss/Train loss', train_loss, global_step=epoch)
         writer.add_scalar(f'Loss/Val loss', val_loss, global_step=epoch)
-        writer.add_scalar(f'Metrics/Acc', acc, global_step=epoch)
+        writer.add_scalar(f'Metrics/Accuracy', acc, global_step=epoch)
+        writer.add_scalar(f'Metrics/Recall', recall, global_step=epoch)
+        writer.add_scalar(f'Metrics/F1', f1, global_step=epoch)
+        
         loss_list.append((train_loss, val_loss))
         
         str_epoch = f'Epoch [{epoch+1}/{cfg.n_epochs}]'
         str_train_loss = f'Training Loss: {train_loss:.8f}'
         str_val_loss = f'Validation Loss: {val_loss:.8f}'
-        acc_value = f'Accuracy: {acc:.8f}'
-        tqdm.write(f'{str_epoch}, {str_train_loss}, {str_val_loss}, {acc_value}')
+        str_acc_value = f'Accuracy: {acc:.4f}'
+        str_rec_value = f'Recall: {recall:.4f}'
+        str_f1_value = f'F1: {f1:.4f}'
+        
+        tqdm.write(f'{str_epoch}, {str_train_loss}, {str_val_loss}, {str_acc_value}, {str_rec_value}, {str_f1_value}')
 
