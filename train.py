@@ -27,8 +27,9 @@ import pickle as pkl
 
 @dataclass(frozen=True)
 class cfg:
-    n_epochs: int = 500
-    network: Literal['CNN', 'LSTM'] = 'LSTM'
+    n_epochs: int = 1000
+    mode: Literal["train", "test"] = "train"
+    network: Literal['CNN', 'LSTM', 'CNN_LSTM'] = 'LSTM'
     bidirectional: bool = False
     test_size: float = 0.2
     d_input: int = 1
@@ -38,10 +39,10 @@ class cfg:
     n_batches: int = 1024
     weighted_loss: bool = True
     lr: float = 0.001
-    n_freqs: int = 8 
+    n_freqs: int = 4
     i_val: int = 10
     i_save: int = 100
-    i_pred: int = 50
+    i_pred: int = 10
     device: str = 'cuda:0'
     log_dir: str = './logs'
     exp_tag: str = ''
@@ -63,9 +64,16 @@ if __name__ == '__main__':
     X = np.asarray(train_df[features_col])
     y = np.asarray(train_df[target_col])
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=cfg.test_size, random_state=42)
+    if cfg.mode == 'test':
+        X_train = X
+        y_train = y
     print(X.shape, y.shape, X_train.shape, X_val.shape, y_train.shape, y_val.shape)
 
-    exp_name = f'network={cfg.network}_d-hidden={cfg.d_hidden}_n-layers={cfg.n_layers}_weighted_loss={cfg.weighted_loss}_n-freqs={cfg.n_freqs}'
+    exp_name = f'{cfg.network}_d-hidden={cfg.d_hidden}_n-layers={cfg.n_layers}_n-freqs={cfg.n_freqs}'
+    if not cfg.weighted_loss:
+        exp_name += f'_no-weighted-loss'
+    if cfg.bidirectional:
+        exp_name += f'_bidirectional'
     if cfg.exp_tag != '':
         exp_name = cfg.exp_tag + '-' + exp_name
     log_path = path.join(cfg.log_dir, exp_name)
@@ -85,6 +93,9 @@ if __name__ == '__main__':
         network = LSTM(encoder.d_output, cfg.d_hidden, cfg.n_classes, cfg.n_layers, cfg.bidirectional).to(cfg.device)
     elif cfg.network == 'CNN':
         network = CNN(encoder.d_output, cfg.d_hidden, cfg.n_classes, cfg.n_layers).to(cfg.device)
+    elif cfg.network == 'CNN_LSTM':
+        network = CNN_LSTM(encoder.d_output, cfg.d_hidden, cfg.n_classes, cfg.n_layers, cfg.bidirectional).to(cfg.device)
+        
     if cfg.weighted_loss:
         n_per_class = pd.Series(y_train).value_counts().sort_index()
         weight = (n_per_class.max() / n_per_class).to_list()
@@ -175,7 +186,6 @@ if __name__ == '__main__':
                     labels = labels.long().to(cfg.device)
                     inputs = encoder(inputs.float())
                     outputs = network(inputs)
-                    
                     logits.append(torch.softmax(outputs, dim=-1))
                     ys.append(labels)
             logits = torch.cat(logits, dim=0).detach().cpu().numpy()
