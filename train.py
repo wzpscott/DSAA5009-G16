@@ -196,17 +196,27 @@ if __name__ == '__main__':
         if i_epoch % cfg.i_pred == 0:      
             heart_testing = HeartBeatDataset(np.asarray(test_df), y=None)
             heart_testloader = DataLoader(heart_testing, batch_size=cfg.n_batches, shuffle=False)
-            preds = []
+            outputs = []
+            # preds = []
             with torch.no_grad():
                 for i, data in enumerate(heart_testloader):
                     inputs = data
                     inputs = inputs.to(cfg.device)
                     inputs = encoder(inputs.float())
-                    outputs = network(inputs)
-                    pred = torch.argmax(outputs, dim=-1)
-                    preds.append(pred)
-            preds = torch.cat(preds, dim=0).cpu().detach().numpy()
-            results = pd.DataFrame()
-            results['id'] = [i for i in range(1, preds.shape[0]+1)]       
-            results['predicted'] = preds      
-            results.to_csv(path.join(log_path, f'{i_epoch}.csv'), index=False)
+                    output = network(inputs)
+                    # pred = torch.argmax(outputs, dim=-1)
+                    # preds.append(pred)
+                    outputs.append(output)
+            # preds = torch.cat(preds, dim=0).cpu().detach().numpy()
+            outputs = torch.cat(outputs, dim=0).cpu().detach().numpy()
+            results = pd.DataFrame(data=outputs, columns=['N', 'S', 'V', 'N+V', 'U'])
+            results['preds'] = np.argmax(outputs, axis=1)
+            results['mod_preds'] = np.argmax(outputs, axis=1)
+            
+            results.loc[(results['S']>0.05) & (results['preds']==0), 'modified_pred'] = 1
+            results.loc[(results['V']>0.05) & (results['preds']==0), 'modified_pred'] = 2
+            results.loc[(results['N+V']>0.05) & (results['preds']==0), 'modified_pred'] = 3
+            
+            results['id'] = [i for i in range(1, results.shape[0]+1)]  
+            results[['id', 'preds']].to_csv(path.join(log_path, f'{i_epoch}.csv'), index=False)
+            results[['id', 'mod_preds']].to_csv(path.join(log_path, f'mod_{i_epoch}.csv'), index=False)
