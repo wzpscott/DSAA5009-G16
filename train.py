@@ -18,7 +18,8 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 import torch.optim.lr_scheduler as lr_scheduler
 from torch.utils.tensorboard import SummaryWriter
-from torchmetrics.classification import MulticlassConfusionMatrix, MulticlassAccuracy, MulticlassRecall, MulticlassF1Score
+from torchmetrics.classification import MulticlassConfusionMatrix, MulticlassAccuracy, MulticlassRecall, MulticlassF1Score, ROC
+from imblearn.over_sampling import ADASYN
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -29,7 +30,7 @@ import pickle as pkl
 class cfg:
     n_epochs: int = 1000
     mode: Literal["train", "test"] = "train"
-    network: Literal['CNN', 'LSTM', 'CNN_LSTM'] = 'LSTM'
+    network: Literal['CNN', 'LSTM', 'CNN_LSTM'] = 'CNN'
     bidirectional: bool = False
     test_size: float = 0.2
     d_input: int = 1
@@ -46,6 +47,7 @@ class cfg:
     device: str = 'cuda:0'
     log_dir: str = './logs'
     exp_tag: str = ''
+    resample: str = 'minority'
     
 def set_all_seeds(seed=42):
     np.random.seed(seed)
@@ -67,9 +69,13 @@ if __name__ == '__main__':
     if cfg.mode == 'test':
         X_train = X
         y_train = y
-    print(X.shape, y.shape, X_train.shape, X_val.shape, y_train.shape, y_val.shape)
 
-    exp_name = f'{cfg.network}_d-hidden={cfg.d_hidden}_n-layers={cfg.n_layers}_n-freqs={cfg.n_freqs}'
+    X_bal, y_bal = ADASYN(sampling_strategy=cfg.resample,random_state=42).fit_resample(X_train, y_train)
+
+    print(X.shape, y.shape, X_train.shape, X_val.shape, y_train.shape, y_val.shape, X_bal.shape, y_bal.shape)
+
+    exp_name = f'{cfg.network}_d-hidden={cfg.d_hidden}_n-layers={cfg.n_layers}_n-freqs={cfg.n_freqs}_sample_strg={cfg.resample}'
+
     if not cfg.weighted_loss:
         exp_name += f'_no-weighted-loss'
     if cfg.bidirectional:
@@ -80,7 +86,8 @@ if __name__ == '__main__':
     writer = SummaryWriter(log_dir=log_path)
 
     # instantiating the dataset and dataloader for both training and validation
-    heart_training = HeartBeatDataset(X_train, y_train)
+    # heart_training = HeartBeatDataset(X_train, y_train)
+    heart_training = HeartBeatDataset(X_bal, y_bal)
     heart_validating = HeartBeatDataset(X_val, y_val)
 
     heart_trainloader = DataLoader(heart_training, batch_size=cfg.n_batches, shuffle=True)
@@ -131,10 +138,13 @@ if __name__ == '__main__':
             acc = 0.0
             recall = 0.0
             confusion_mats = []
+            label_list = []
+            pred_list = []
             
             acc_fn = MulticlassAccuracy(num_classes=cfg.n_classes).to(cfg.device)
             recall_fn = MulticlassRecall(num_classes=cfg.n_classes).to(cfg.device)
             confusion_mat_fn = MulticlassConfusionMatrix(num_classes=cfg.n_classes).to(cfg.device)
+            roc_curve = ROC(task="multiclass", num_classes=cfg.n_classes).to(cfg.device)
 
             with torch.no_grad():
                 for i, data in enumerate(heart_valloader):
@@ -149,6 +159,8 @@ if __name__ == '__main__':
                     acc += acc_fn(outputs, labels)
                     recall += recall_fn(outputs, labels)
                     confusion_mats.append(confusion_mat_fn(outputs, labels))
+                    label_list.extend(labels)
+                    pred_list.extend(outputs)
                     
             train_loss = running_loss/len(heart_training)
             val_loss = val_loss/len(heart_validating)
@@ -163,6 +175,7 @@ if __name__ == '__main__':
             recall = (np.diag(confusion_mat) / np.sum(confusion_mat, axis = 1)).mean()
             acc = (np.diag(confusion_mat) / np.sum(confusion_mat, axis = 0)).mean()
             f1 = 2*acc*recall / (acc + recall)
+            fpr, tpr, threshold = roc_curve(torch.tensor(torch.stack(pred_list, 0)), torch.tensor(torch.stack(label_list, 0)))
             
             writer.add_figure("Confusion matrix", sns.heatmap(df_cm, annot=True, cmap='coolwarm_r').get_figure(), i_epoch)
             writer.add_scalar(f'Loss/Train loss', train_loss, global_step=i_epoch)
@@ -170,6 +183,17 @@ if __name__ == '__main__':
             writer.add_scalar(f'Metrics/Accuracy', acc, global_step=i_epoch)
             writer.add_scalar(f'Metrics/Recall', recall, global_step=i_epoch)
             writer.add_scalar(f'Metrics/F1', f1, global_step=i_epoch)
+
+            fig1 = plt.figure(figsize=(15,8)) 
+            ax = fig1.subplots()
+            for i,w,k in zip(range(cfg.n_classes), classes, 'bgrcm'):
+                ax.plot(fpr[i].cpu().detach().numpy(),tpr[i].cpu().detach().numpy(), c=k, label=w)
+                ax.set_xlabel('False Positive Rate')
+                ax.set_ylabel('True Positive Rate')
+                ax.set_title('ROC Curve')
+                ax.legend(loc='lower right') 
+            plt.show()
+            writer.add_figure(f'Metrics/ROC_curve', fig1, global_step=i_epoch)
             
             tqdm.write(f'[VAL Epoch {i_epoch}]: Validation Loss: {val_loss:.8f}, Accuracy: {acc:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}')
 
