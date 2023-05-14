@@ -2,3 +2,5 @@ data/
 logs/
 logs*
 __pycache__/
+*.sh
+*.csv
